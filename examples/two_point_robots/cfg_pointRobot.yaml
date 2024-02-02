@@ -1,0 +1,8 @@
+mppi: 
+  u_min: [-1.5]
+  u_max: [1.5]
+  noise_sigma: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]]
+
+simulator:
+  urdf: "pointRobot.urdf"
+  mode: "vel"
