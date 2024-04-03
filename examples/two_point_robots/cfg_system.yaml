@@ -1,6 +1,5 @@
 device: "cuda:0"
 dt: 0.05
-steps: 1000
 
 mppi: 
   mppi_mode: "halton-spline"  # halton-spline, simple
@@ -17,3 +16,4 @@ mppi:
 
 simulator:
   render: True
+  steps: 1000

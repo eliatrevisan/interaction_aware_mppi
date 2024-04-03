@@ -14,10 +14,10 @@ def load_config(file_path):
         config = yaml.safe_load(file)
     
     # Load system config
-    system_config = yaml.safe_load(open(f"{abs_path}/cfg_system.yaml"))
+    config['system'] = yaml.safe_load(open(f"{abs_path}/cfg_system.yaml"))
 
-    for agent, agent_config in config.get('agents', {}).items():
-        config['agents'][agent].update(system_config)
+    # for agent, agent_config in config.get('agents', {}).items():
+    #     config['agents'][agent].update(config['system'])
 
     # Check if there are any other yaml files to import in the 'agents' section
     for agent, agent_config in config.get('agents', {}).items():
@@ -43,32 +43,29 @@ def deep_update(source, overrides):
 CONFIG = load_config(f"{abs_path}/cfg_agents.yaml")
 
 
-class Agent:
-    def __init__(self, config):
-        self.cfg = config
-        self.simulator = Simulator(
-            cfg=self.cfg["simulator"],
-            dt=self.cfg["dt"],
-            goal=self.cfg["goal"],
-            device=self.cfg["device"],
-        )
+class PointRobotAgent:
+    def __init__(self, agent_config, system_config):
+        self.agent_cfg = agent_config
+        self.sys_cfg = system_config
         self.dynamics = OmnidirectionalPointRobotDynamics(
-            dt=self.cfg["dt"], device=self.cfg["device"]
+            dt=self.sys_cfg["dt"], device=self.sys_cfg["device"]
         )
-        self.objective = OmnidirectionalPointRobotObjective(goal=self.cfg["goal"], device=self.cfg["device"])
+        self.objective = OmnidirectionalPointRobotObjective(goal=self.agent_cfg["initial_goal"], device=self.sys_cfg["device"])
 
 def run_point_robot_example():
 
     agents = {}
 
     for agent_name, agent_config in CONFIG.get('agents', {}).items():
-        agent = Agent(agent_config)
+        agent = PointRobotAgent(agent_config, CONFIG["system"])
         agents[agent_name] = agent
 
     # Now you have a dictionary of Agent objects. You can access each agent by its name.
+        
+    simulator = Simulator(agents_cfg=CONFIG["agents"], sys_cfg=CONFIG["system"])
 
     initial_action = torch.zeros(3, device=CONFIG["device"])
-    observation = agents["agent1"].simulator.step(initial_action)
+    observation = simulator.step(initial_action)
 
     for _ in tqdm(range(CONFIG["steps"])):
         action = agents[0].planner.command(observation)

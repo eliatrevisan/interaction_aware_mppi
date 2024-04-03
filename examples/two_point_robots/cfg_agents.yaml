@@ -2,8 +2,8 @@ agents:
   agent0:
     config: "cfg_pointRobot.yaml"
     initial_pose: [-5.0, 0.0, 0.0]
-    goal: [5.0, 0.0]
+    initial_goal: [5.0, 0.0]
   agent1:
     config: "cfg_pointRobot.yaml"
     initial_pose: [5.0, 0.0, 0.0]
-    goal: [-5.0, 0.0]
+    initial_goal: [-5.0, 0.0]

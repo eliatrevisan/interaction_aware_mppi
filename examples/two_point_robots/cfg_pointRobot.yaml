@@ -6,3 +6,4 @@ mppi:
 simulator:
   urdf: "pointRobot.urdf"
   mode: "vel"
+  type: "GenericUrdfReacher"
