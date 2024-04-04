@@ -1,9 +1,11 @@
+import sys
+sys.path.append('/root/dev/ia_mppi/ia_mppi/')
 import torch
 import os
 from simulator import Simulator
-from objective import OmnidirectionalPointRobotObjective
+from objective import OmnidirectionalPointRobotObjective, SocialNavigationObjective
 from dynamics import OmnidirectionalPointRobotDynamics
-from mppi_torch.mppi import MPPIPlanner
+from nh_ia_mppi import IAMPPIPlanner
 import yaml
 from tqdm import tqdm
 
@@ -62,15 +64,18 @@ def run_point_robot_example():
 
     # Now you have a dictionary of Agent objects. You can access each agent by its name.
         
+    configuration_cost = SocialNavigationObjective()
+        
     simulator = Simulator(agents_cfg=CONFIG["agents"], sys_cfg=CONFIG["system"])
+    planner = IAMPPIPlanner(agents, configuration_cost.compute_configuration_cost, sys_cfg=CONFIG["system"])
 
-    initial_action = torch.zeros(3, device=CONFIG["device"])
+    initial_action = planner.zero_command()
     observation = simulator.step(initial_action)
 
-    for _ in tqdm(range(CONFIG["steps"])):
-        action = agents[0].planner.command(observation)
+    for _ in tqdm(range(CONFIG['system']['simulator']['steps'])):
 
-        observation = agents[0].simulator.step(action)
+        action = planner.command(observation)
+        observation = simulator.step(action)
 
 
 if __name__ == "__main__":

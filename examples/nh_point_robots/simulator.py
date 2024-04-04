@@ -10,6 +10,7 @@ class Simulator:
         self._device = sys_cfg["device"]
         self._dt = sys_cfg["dt"]
         self._environment = self._initalize_environment(agents_cfg, sys_cfg)
+        self._agents = agents_cfg.keys()
 
     def _initalize_environment(self, agents_cfg, sys_cfg) -> UrdfEnv:
         """
@@ -52,13 +53,17 @@ class Simulator:
             env.add_goal(goal)
         return env
 
-    def step(self, action: torch.Tensor) -> torch.Tensor:
-        observation_dict, _, terminated, _, info = self._environment.step(action)
-        observation_tensor = torch.tensor(
-            [
-                [*observation_dict["robot_0"]["joint_state"]["position"],
-                *observation_dict["robot_0"]["joint_state"]["velocity"]]
-            ],
-            device="cuda:0",
-        )
-        return observation_tensor
+    def step(self, action) -> torch.Tensor:
+        # Extract the actions from the dictionary and concatenate them into a numpy array
+        action_array = np.concatenate([a.cpu().numpy() for a in action.values()])
+
+        observation_dict, _, terminated, _, info = self._environment.step(action_array)
+
+        restructured_observation_dict = {}
+        for agent_name, obs_name in zip(self._agents, observation_dict):
+            position = observation_dict[obs_name]['joint_state']['position']
+            velocity = observation_dict[obs_name]['joint_state']['velocity']
+            state = torch.cat([torch.tensor(position), torch.tensor(velocity)])
+            restructured_observation_dict[agent_name] = state
+
+        return restructured_observation_dict
