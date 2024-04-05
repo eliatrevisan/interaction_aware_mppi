@@ -74,7 +74,10 @@ class IAMPPIPlanner:
         
         agents_cost = torch.sum(self._agent_cost.compute_running_cost(reshaped_state), dim=1)
 
-        conf_cost = self._config_cost.compute_running_cost(reshaped_state, reshaped_init_state, self.t)
+        if self._num_agents <=1:
+            conf_cost = torch.zeros(1, device=self._device)
+        else:
+            conf_cost = self._config_cost.compute_running_cost(reshaped_state, reshaped_init_state, self.t)
         self.t += self._dt
 
         return conf_cost + agents_cost

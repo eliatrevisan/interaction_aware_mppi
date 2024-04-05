@@ -1,0 +1,41 @@
+device: "cuda:0"
+dt: 0.1
+
+agents:
+  agent0:
+    initial_pose: [-2.0, 0.0, 0.0]
+    initial_goal: [2.0, 0.0]
+  agent1:
+    initial_pose: [2.0, 0.0, 3.14]
+    initial_goal: [-2.0, 0.0]
+  agent2:
+    initial_pose: [0.0, 2.0, -1.57]
+    initial_goal: [0.0, -2.0]
+  agent3:
+    initial_pose: [0.0, -2.0, 1.57]
+    initial_goal: [0.0, 2.0]
+
+mppi: 
+  mppi_mode: "halton-spline"  # halton-spline, simple
+  sampling_method: "halton"   # halton, random
+  num_samples: 2000
+  horizon: 20                 # At least 12 for Halton Sampling
+  lambda_: 0.1
+  update_cov: False
+  rollout_var_discount: 0.95
+  sample_null_action: True
+  noise_abs_cost: False
+  filter_u: True
+  use_priors: True
+  nx: 6 # number of states
+  nu: 2 # number of inputs
+  u_min: [-0.5, -1.5]
+  u_max: [1.5, 1.5]
+  noise_sigma: [[0.5, 0.], [0., 2.0]]
+  u_per_command: 20
+
+simulator:
+  render: True
+  steps: 200 
+  urdf: "jackal.urdf"
+  mode: "vel"
