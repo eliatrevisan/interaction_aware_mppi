@@ -9,8 +9,9 @@ class Simulator:
     def __init__(self, cfg) -> None:
         self._device = cfg["device"]
         self._dt = cfg["dt"]
-        self._environment = self._initalize_environment(cfg)
         self._agents = {name: i for i, name in enumerate(cfg["agents"])}
+        self._environment = self._initalize_environment(cfg)
+        self._first_plot = True
 
     def _initalize_environment(self, cfg) -> UrdfEnv:
         """
@@ -64,3 +65,22 @@ class Simulator:
             restructured_observation_dict[agent_name] = state
 
         return restructured_observation_dict
+    
+    def plot_trajectories(self, traj_dict):
+        if self._first_plot:
+            marker_ids = []
+            colors = [[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]]  # Add more colors if needed
+            iterations = len(traj_dict)/len(self._agents)
+            for i in range(int(iterations)):
+                color = colors[i % len(colors)]  # Cycle through colors if there are more agents than colors
+                marker_ids.extend([self._environment.add_visualization(size=[0.02,0.02], rgba_color=color) for _ in range(len(self._agents)*traj_dict[next(iter(traj_dict))].size()[0])])
+            self._first_plot = False
+
+
+        positions_3d = []
+        for agent_name in traj_dict.keys():
+            trajectory_positions = traj_dict[agent_name].cpu().numpy()
+            trajectory_positions_3d = [np.append(state[:2], 0) for state in trajectory_positions]
+            positions_3d.extend(trajectory_positions_3d)
+        self._environment.update_visualizations(positions_3d)
+        return
