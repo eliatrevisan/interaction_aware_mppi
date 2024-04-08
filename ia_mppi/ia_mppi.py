@@ -189,3 +189,21 @@ class IAMPPIPlanner:
             predicted_goals.append(terminal_state)
 
         return torch.stack(predicted_goals)
+    
+    def get_goals(self):
+        return self._agent_cost.get_goals()
+    
+    def update_ego_goal(self, observation):
+        current_ego_pos = observation[self._ego_agent][0:2]
+        current_goals = self._agent_cost.get_goals()
+        current_ego_goal = current_goals[self._agents[self._ego_agent]]
+
+        # Compute the distance between the current ego position and the current ego goal
+        distance = torch.norm(current_ego_pos - current_ego_goal)
+
+        # If the distance is less than a threshold, update the ego goal
+        if distance < 0.5:
+            current_goals[self._agents[self._ego_agent]] = -current_ego_goal
+        
+        self._agent_cost.set_goals(current_goals)
+        return None
