@@ -1,4 +1,4 @@
-device: "cuda:0"
+device: "cpu"
 dt: 0.1
 
 agents:
@@ -18,12 +18,14 @@ agents:
 mppi: 
   mppi_mode: "halton-spline"  # halton-spline, simple
   sampling_method: "halton"   # halton, random
-  num_samples: 2000
-  horizon: 20                 # At least 12 for Halton Sampling
+  num_samples: 500
+  horizon: 30                 # At least 12 for Halton Sampling
+  horizon_cutoff: 100
+  dt_cutoff: 0.5
   lambda_: 0.1
   update_cov: False
   rollout_var_discount: 0.95
-  sample_null_action: True
+  sample_null_action: False
   noise_abs_cost: False
   filter_u: True
   use_priors: True
@@ -31,7 +33,7 @@ mppi:
   nu: 4 # number of inputs
   u_min: [-6, -6, -6, -6]
   u_max: [6, 6, 6, 6]
-  noise_sigma: [[2.0, 0., 0., 0.], [0., 2., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]]
+  noise_sigma: [[6., 0., 0., 0.], [0., 6., 0., 0.], [0., 0., 6., 0.], [0., 0., 0., 6.]]
   u_per_command: 20
 
 simulator:

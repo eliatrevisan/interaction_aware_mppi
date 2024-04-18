@@ -4,13 +4,13 @@ import torch
 class RoboatObjective(object):
     def __init__(self, goals, device="cuda:0"):
         self.nav_goals = torch.tensor(goals, device=device).unsqueeze(0)
-        self._goal_weight = 1.0
+        self._goal_weight = 2.0
         self._back_vel_weight = 1.0
-        self._rot_vel_weight = 0.1
-        self._lat_vel_weight = 2.0
+        self._rot_vel_weight = 0.01
+        self._lat_vel_weight = 0.05
         self._heading_to_goal_weight = 1.0
         self._max_speed = 0.3 # m/s
-        self._max_speed_weight = 100.0
+        self._max_speed_weight = 5.0
 
     def compute_running_cost(self, state: torch.Tensor):
         goal_dist = self._goal_cost(state[:, :, 0:2])
@@ -32,8 +32,11 @@ class RoboatObjective(object):
         lat_vel_cost = vel_body[:, :, 1] ** 2 * self._lat_vel_weight
         rot_vel_cost = state[:, :, 5] ** 2 * self._rot_vel_weight
 
-        # penalize x velocity exceeding max speed
-        exceed_max_speed_cost = torch.relu(vel_body[:, :, 0] - self._max_speed) ** 2 * self._max_speed_weight
+        # Calculate the magnitude of the velocity
+        vel_magnitude = torch.norm(vel_body, dim=2)
+
+        # Penalize velocity magnitude exceeding max speed
+        exceed_max_speed_cost = (vel_magnitude - self._max_speed) ** 2 * self._max_speed_weight
 
         return back_vel_cost + lat_vel_cost + rot_vel_cost + exceed_max_speed_cost
     
@@ -59,21 +62,20 @@ class RoboatObjective(object):
 class SocialNavigationObjective(object):
     def __init__(self, device="cuda:0"):
         self._device = device
-        self._min_dist = 0.6
-        self._circle_offset = 0.2
+        self._min_dist = 1.0
         self.width = 0.45
         self.height = 0.9
         self._coll_weight = 100.0
         self._rule_cross_radius = 5.0
         self._rule_headon_radius = 2.0
         self._rule_angle = torch.pi/4.0
-        self._rule_min_vel = 0.1
-        self._headon_weight = 1.0
+        self._rule_min_vel = 0.05
+        self._headon_weight = 5.0
         self._crossing_weight = 5.0
 
 
     def compute_running_cost(self, agents_states, init_agent_state, t):
-        return self._rule_cost(agents_states, init_agent_state, t) + self._dynamic_collision_cost_rectangle(agents_states)
+        return self._rule_cost(agents_states, init_agent_state, t) + self._dynamic_collision_cost(agents_states)
     
     def _dynamic_collision_cost(self, agents_states):
         # Compute collision cost for each pair of agents
@@ -82,6 +84,8 @@ class SocialNavigationObjective(object):
         agent_i_states = torch.stack([agents_states[:,index,:] for index in i])
         agent_j_states = torch.stack([agents_states[:,index,:] for index in j])
 
+        # grid = self.create_occupancy_grid(agent_i_states)
+
         # Compute the distance between each pair of agents
         dist = torch.linalg.norm(agent_i_states[:, :, :2] - agent_j_states[:, :, :2], dim=2)
         # Compute the cost for each sample
@@ -89,6 +93,38 @@ class SocialNavigationObjective(object):
 
         return cost
     
+    def create_occupancy_grid(self, agent_i_states):
+        # Create a 1000x1000 pixel grid initialized with zeros
+        grid = torch.zeros((1000, 1000))
+
+        # Convert the agent's position from world coordinates to pixel coordinates
+        # Assume that the world frame is centered at (500, 500) in pixel coordinates
+        agent_position_pixel = (agent_i_states[:, :, :2] * 10 + 500).long()
+
+        # Convert the agent's size from meters to pixels
+        agent_size_pixel = (torch.tensor([self.height, self.width]) * 10).long()
+
+        # Get the agent's heading
+        theta = agent_i_states[:, :, 2]
+
+        # Fill in the grid with ones where the agent is located
+        for i in range(agent_position_pixel.shape[0]):
+            x, y = agent_position_pixel[i]
+            half_length, half_width = agent_size_pixel // 2
+
+            # Create a rectangle representing the agent
+            rectangle = torch.zeros((half_width * 2, half_length * 2))
+            rectangle[half_width-half_width:half_width+half_width, half_length-half_length:half_length+half_length] = 1
+
+            # Rotate the rectangle according to the agent's heading
+            rotation_matrix = torch.tensor([[torch.cos(theta[i]), -torch.sin(theta[i])], [torch.sin(theta[i]), torch.cos(theta[i])]])
+            rectangle = torch.einsum('ij,jkl->ikl', rotation_matrix, rectangle)
+
+            # Add the rectangle to the grid
+            grid[y-half_width:y+half_width, x-half_length:x+half_length] += rectangle
+
+        return grid
+
     def _rule_cost(self, agents_states, init_agent_states, t):
         # Compute cost for head-on collisions
         n = agents_states.shape[1]
@@ -119,6 +155,7 @@ class SocialNavigationObjective(object):
         pos_i = agent_i_states[:, :, :2]
         pos_j = agent_j_states[:, :, :2]
         vel_i = agent_i_states[:, :, 3:5]
+        theta_i = agent_i_states[:, :, 2]
 
         # Compute the vector from the first agent to the second agent
         vij = pos_j - pos_i
@@ -127,6 +164,10 @@ class SocialNavigationObjective(object):
         angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
         angle = angle_vij - angle_vel_i
+
+        # # Compute the angle between vij and heading of agent i
+        # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
+        # angle = angle_vij - theta_i
 
         # compute angle diff and nomalize to [-pi, pi]
         angle_diff = torch.atan2(torch.sin(angle + torch.pi/2), torch.cos(angle + torch.pi/2))
@@ -141,11 +182,16 @@ class SocialNavigationObjective(object):
         # Get the velocities of the agents
         vel_i = agent_i_states[:, :, 3:5]
         vel_j = agent_j_states[:, :, 3:5]
+        theta_i = agent_i_states[:, :, 2]
+        theta_j = agent_j_states[:, :, 2]
 
         # Compute the angle between vel_i and vel_j
         angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
         angle_vel_j = torch.atan2(vel_j[:, :, 1], vel_j[:, :, 0])
         angle = angle_vel_j - angle_vel_i
+
+        # # Compute the angle between agents' headings
+        # angle = theta_j - theta_i
 
         # compute angle diff and normalize to [-pi, pi]
         angle_diff = torch.atan2(torch.sin(angle - torch.pi), torch.cos(angle - torch.pi))
@@ -155,7 +201,7 @@ class SocialNavigationObjective(object):
         magnitude_vel_j = torch.sqrt((vel_j ** 2).sum(dim=2))
 
         # Check if the absolute difference between angle and pi is less than the rule angle
-        is_headon = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i > self._rule_min_vel) & (magnitude_vel_j > self._rule_min_vel)
+        is_headon = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i >= self._rule_min_vel) & (magnitude_vel_j >= self._rule_min_vel)
 
         return is_headon
     
@@ -164,6 +210,8 @@ class SocialNavigationObjective(object):
         pos_j = init_agent_j_states[:, :, :2]
         vel_i = init_agent_i_states[:, :, 3:5]
         vel_j = init_agent_j_states[:, :, 3:5]
+        theta_i = init_agent_i_states[:, :, 2]
+        theta_j = init_agent_j_states[:, :, 2]
 
         # Compute the vector from the first agent to the second agent
         vij = pos_j - pos_i
@@ -172,6 +220,10 @@ class SocialNavigationObjective(object):
         angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
         angle = angle_vij - angle_vel_i
+
+        # # Compute the angle between vij and heading of agent i
+        # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
+        # angle = angle_vij - theta_i
 
         # Nomalize to [-pi, pi]
         angle = torch.atan2(torch.sin(angle), torch.cos(angle))
@@ -186,6 +238,9 @@ class SocialNavigationObjective(object):
         angle_vel_j = torch.atan2(vel_j[:, :, 1], vel_j[:, :, 0])
         angle_2 = angle_vel_j - angle_vel_i
 
+        # # Compute the angle between agents' headings
+        # angle_2 = theta_j - theta_i
+
         # compute angle diff and normalize to [-pi, pi]
         angle_diff = torch.atan2(torch.sin(angle_2 - torch.pi/2), torch.cos(angle_2 - torch.pi/2))
 
@@ -193,7 +248,7 @@ class SocialNavigationObjective(object):
         magnitude_vel_i = torch.sqrt((vel_i ** 2).sum(dim=2))
         magnitude_vel_j = torch.sqrt((vel_j ** 2).sum(dim=2))
 
-        is_giveway_vel = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i > self._rule_min_vel) & (magnitude_vel_j > self._rule_min_vel)
+        is_giveway_vel = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i >= self._rule_min_vel) & (magnitude_vel_j >= self._rule_min_vel)
 
         return is_front_right.expand(-1, k) & is_giveway_vel.expand(-1, k)
     
@@ -202,6 +257,7 @@ class SocialNavigationObjective(object):
         init_pos_j = init_agent_j_states[:, :, :2]
         vel_i = agent_i_states[:, :, 3:5]
         init_vel_j = init_agent_j_states[:, :, 3:5]
+        theta_i = agent_i_states[:, :, 2]
 
         # find current position of agent j
         pos_j = init_pos_j + init_vel_j * t
@@ -216,6 +272,10 @@ class SocialNavigationObjective(object):
         angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
         angle = angle_vij - angle_vel_i
+
+        # # Compute the angle between vij and heading of agent i
+        # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
+        # angle = angle_vij - theta_i
 
         # # Nomalize to [-pi, pi]
         angle_diff = torch.atan2(torch.sin(angle + torch.pi/2), torch.cos(angle + torch.pi/2))

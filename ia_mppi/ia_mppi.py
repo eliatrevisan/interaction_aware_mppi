@@ -53,6 +53,8 @@ class IAMPPIPlanner:
         # Remove entries from the dictionary to make MPPIPlanner happy
         cfg['mppi'].pop('nx', None)
         cfg['mppi'].pop('nu', None)
+        cfg['mppi'].pop('horizon_cutoff', None)
+        cfg['mppi'].pop('dt_cutoff', None)
 
         return cfg
     

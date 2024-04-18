@@ -93,19 +93,20 @@ class Simulator:
     
     def plot_trajectories(self, traj_dict):
         if self._first_plot:
-            marker_ids = []
+            self.marker_ids = []
             colors = [[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]]  # Add more colors if needed
             iterations = len(traj_dict)/len(self._agents)
             for i in range(int(iterations)):
                 color = colors[i % len(colors)]  # Cycle through colors if there are more agents than colors
-                marker_ids.extend([p.add_visualization(size=[0.02,0.02], rgba_color=color) for _ in range(len(self._agents)*traj_dict[next(iter(traj_dict))].size()[0])])
+                for _ in range(len(self._agents)*traj_dict[next(iter(traj_dict))].size()[0]):
+                    visual_shape_id = p.createVisualShape(p.GEOM_SPHERE, radius=0.02, rgbaColor=color)
+                    body_id = p.createMultiBody(baseMass=0, baseVisualShapeIndex=visual_shape_id)
+                    self.marker_ids.append(body_id)
             self._first_plot = False
 
-
-        positions_3d = []
-        for agent_name in traj_dict.keys():
+        for i, agent_name in enumerate(traj_dict.keys()):
             trajectory_positions = traj_dict[agent_name].cpu().numpy()
-            trajectory_positions_3d = [np.append(state[:2], 0) for state in trajectory_positions]
-            positions_3d.extend(trajectory_positions_3d)
-        p.update_visualizations(positions_3d)
+            for j, state in enumerate(trajectory_positions):
+                position_3d = np.append(state[:2], 0)
+                p.resetBasePositionAndOrientation(self.marker_ids[i*len(trajectory_positions) + j], position_3d, (0, 0, 0, 1))
         return

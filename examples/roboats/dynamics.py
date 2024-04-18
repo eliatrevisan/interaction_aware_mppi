@@ -82,11 +82,11 @@ class QuarterRoboatDynamics:
         
     def step(self, states: torch.Tensor, actions: torch.Tensor, t: int = -1) -> torch.Tensor:
 
-        # # Change dt if the horizon cutoff is reached to extend the predicted time horizon
-        # if t < self.cfg["mppi"]["horizon_cutoff"]:
-        #     self.dt = self.cfg["mppi"]["dt"]
-        # else:
-        #     self.dt = self.cfg["mppi"]["dt_horizon"]
+        # Change dt if the horizon cutoff is reached to extend the predicted time horizon
+        if t < self.cfg["mppi"]["horizon_cutoff"]:
+            self.dt = self.cfg["dt"]
+        else:
+            self.dt = self.cfg["mppi"]["dt_cutoff"]
 
 
         # Set u 
