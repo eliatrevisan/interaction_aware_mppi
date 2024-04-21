@@ -10,6 +10,7 @@ import yaml
 from tqdm import tqdm
 import copy
 import time
+from torch.profiler import profile, record_function, ProfilerActivity
 
 # Load the config file
 abs_path = os.path.dirname(os.path.abspath(__file__))
@@ -46,9 +47,16 @@ def run_point_robot_example():
     for _ in tqdm(range(CONFIG['simulator']['steps'])):
         start_time = time.time()
 
-        # print(observation['agent1'])
+        # with profile(with_stack=True, profile_memory=True, experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)) as prof:
+        #         planner.make_plan(observation)
+        # # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=50))
+        # prof.export_stacks("/tmp/profiler_stacks.txt", "self_cuda_time_total")
 
         planner.make_plan(observation)
+
+        end_time = time.time()
+        print(f"Planning time: {end_time - start_time}")
+
         action = planner.get_command()
         # action = planner.zero_command()
         # action['agent0'] = torch.tensor([1.0, 1.5, 0., 0.], device=CONFIG["device"])
@@ -60,8 +68,8 @@ def run_point_robot_example():
         elapsed_time = end_time - start_time
         sleep_time = CONFIG['dt'] - elapsed_time
 
-        if sleep_time > 0:
-            time.sleep(sleep_time)
+        # if sleep_time > 0:
+        #     time.sleep(sleep_time)
 
 
 if __name__ == "__main__":

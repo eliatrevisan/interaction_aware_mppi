@@ -1,6 +1,5 @@
 import torch
 
-
 class OmnidirectionalPointRobotDynamics:
     def __init__(self, dt=0.05, device="cuda:0") -> None:
         self._dt = dt
@@ -71,42 +70,36 @@ class QuarterRoboatDynamics:
         self.Minv = torch.inverse(self.M)
 
     def rot_matrix(self, heading):
-        stacked = torch.stack([torch.cos(heading), -torch.sin(heading), torch.zeros_like(heading), torch.sin(heading), torch.cos(heading), torch.zeros_like(heading), torch.zeros_like(heading), torch.zeros_like(heading), torch.ones_like(heading)], dim=1).reshape(heading.size(0), 3, 3, heading.size(1)).to(self.device)
+        cos = torch.cos(heading)
+        sin = torch.sin(heading)
+        stacked = torch.stack([cos, -sin, self.zeros, sin, cos, self.zeros, self.zeros, self.zeros, torch.ones_like(heading)], dim=1).reshape(heading.size(0), 3, 3, heading.size(1)).to(self.device)
 
         return stacked.permute(0, 3, 1, 2)
         
     def coriolis(self, vel):
-        stacked = torch.stack([torch.zeros_like(vel[:, :, 0]), torch.zeros_like(vel[:, :, 0]), -self.m22  * vel[:, :,1], torch.zeros_like(vel[:, :, 0]), torch.zeros_like(vel[:, :, 0]), self.m11 * vel[:, :,0], self.m22 * vel[:, :,1], -self.m11 * vel[:, :,0], torch.zeros_like(vel[:, :, 0]),], dim=1).reshape(vel.size(0), 3, 3, vel.size(1)).to(self.device)
+        stacked = torch.stack([self.zeros, self.zeros, -self.m22  * vel[:, :,1], self.zeros, self.zeros, self.m11 * vel[:, :,0], self.m22 * vel[:, :,1], -self.m11 * vel[:, :,0], self.zeros,], dim=1).reshape(vel.size(0), 3, 3, vel.size(1)).to(self.device)
 
         return stacked.permute(0, 3, 1, 2)
         
     def step(self, states: torch.Tensor, actions: torch.Tensor, t: int = -1) -> torch.Tensor:
 
-        # Change dt if the horizon cutoff is reached to extend the predicted time horizon
-        if t < self.cfg["mppi"]["horizon_cutoff"]:
-            self.dt = self.cfg["dt"]
-        else:
-            self.dt = self.cfg["mppi"]["dt_cutoff"]
-
-
-        # Set u 
-        u = actions
+        # # Change dt if the horizon cutoff is reached to extend the predicted time horizon
+        # if t < self.cfg["mppi"]["horizon_cutoff"]:
+        #     self.dt = self.cfg["dt"]
+        # else:
+        #     self.dt = self.cfg["mppi"]["dt_cutoff"]
 
         # Set current pose and velocity
-        pose_enu = states[:,:,0:3]
+        pose = states[:,:,0:3]
+
+        self.zeros = torch.zeros_like(pose[:,:,0])
         
         # Convert from ENU to NED
-        pose = torch.zeros_like(pose_enu)
-        pose[:, :, 0] = pose_enu[:, :, 1]
-        pose[:, :, 1] = pose_enu[:, :, 0]
-        pose[:, :, 2] = torch.pi/2 -pose_enu[:, :, 2]
+        pose[:, :, 2] = torch.pi/2 -pose[:, :, 2]
 
-        vel_enu = states[:,:,3:6]
+        vel = states[:,:,3:6]
         # Convert from ENU to NED
-        vel = torch.zeros_like(vel_enu)
-        vel[:, :, 0] = vel_enu[:, :, 1]
-        vel[:, :, 1] = vel_enu[:, :, 0]
-        vel[:, :, 2] = -vel_enu[:, :, 2]
+        vel[:, :, 2] = -vel[:, :, 2]
 
         # Rotate velocity to the body frame
         vel_body = torch.bmm(self.rot_matrix(-pose[:,:,2]).reshape(-1,3,3), vel.reshape(-1,3).unsqueeze(2)).reshape(vel.size(0), vel.size(1), vel.size(2))
@@ -120,7 +113,7 @@ class QuarterRoboatDynamics:
         D_batch = self.D.repeat(vel.reshape(-1,3).size(0), 1, 1)
         C_batch = self.coriolis(vel_body).reshape(-1,3,3)
         
-        new_vel_body = torch.bmm(Minv_batch, (torch.bmm(B_batch, u.reshape(-1,4).unsqueeze(2))- torch.bmm(C_batch, vel_body.reshape(-1,3).unsqueeze(2)) - torch.bmm(D_batch, vel_body.reshape(-1,3).unsqueeze(2)))).reshape(vel.size(0), vel.size(1), vel.size(2)) * self.dt + vel_body
+        new_vel_body = torch.bmm(Minv_batch, (torch.bmm(B_batch, actions.reshape(-1,4).unsqueeze(2))- torch.bmm(C_batch, vel_body.reshape(-1,3).unsqueeze(2)) - torch.bmm(D_batch, vel_body.reshape(-1,3).unsqueeze(2)))).reshape(vel.size(0), vel.size(1), vel.size(2)) * self.dt + vel_body
 
         # Rotate velocity to the world frame
         vel = torch.bmm(self.rot_matrix(pose[:,:,2]).reshape(-1,3,3), new_vel_body.reshape(-1,3).unsqueeze(2)).reshape(vel.size(0), vel.size(1), vel.size(2))
@@ -129,13 +122,9 @@ class QuarterRoboatDynamics:
         pose += self.dt * vel
 
         # Convert from NED to ENU
-        new_pose = torch.zeros_like(pose)
-        new_pose[:, :, 0] = pose[:, :, 1]
-        new_pose[:, :, 1] = pose[:, :, 0]
+        new_pose = pose
         new_pose[:, :, 2] = torch.pi/2 -pose[:, :, 2]
-        new_vel = torch.zeros_like(vel)
-        new_vel[:, :, 0] = vel[:, :, 1]
-        new_vel[:, :, 1] = vel[:, :, 0]
+        new_vel = vel
         new_vel[:, :, 2] = -vel[:, :, 2]
 
         # Set new state
