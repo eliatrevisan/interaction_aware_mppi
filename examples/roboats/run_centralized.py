@@ -18,8 +18,13 @@ CONFIG = yaml.safe_load(open(f"{abs_path}/cfg_roboats.yaml"))
 
 def run_point_robot_example():
 
-    dynamics = QuarterRoboatDynamics(
-        CONFIG
+    dynamics_sim = QuarterRoboatDynamics(
+        cfg=CONFIG,
+        n_samples=1
+    )
+    dynamics_plan = QuarterRoboatDynamics(
+        CONFIG,
+        n_samples=CONFIG['mppi']['num_samples']
     )
     agent_cost = RoboatObjective(
         goals=torch.tensor([agent_info['initial_goal'] for agent_info in CONFIG['agents'].values()], device=CONFIG["device"]),
@@ -31,12 +36,12 @@ def run_point_robot_example():
         
     simulator = Simulator(
         cfg=CONFIG,
-        dynamics=dynamics.step
+        dynamics=dynamics_sim.step
     )
 
     planner = IAMPPIPlanner(
         cfg=copy.deepcopy(CONFIG),
-        dynamics=dynamics.step,
+        dynamics=dynamics_plan.step,
         agent_cost=copy.deepcopy(agent_cost),
         config_cost=copy.deepcopy(configuration_cost),
     )
@@ -47,12 +52,12 @@ def run_point_robot_example():
     for _ in tqdm(range(CONFIG['simulator']['steps'])):
         start_time = time.time()
 
-        # with profile(with_stack=True, profile_memory=True, experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)) as prof:
-        #         planner.make_plan(observation)
-        # # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=50))
-        # prof.export_stacks("/tmp/profiler_stacks.txt", "self_cuda_time_total")
+        with profile(with_stack=True, profile_memory=True, experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)) as prof:
+                planner.make_plan(observation)
+        # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=50))
+        prof.export_stacks("/tmp/profiler_stacks.txt", "self_cpu_time_total")
 
-        planner.make_plan(observation)
+        # planner.make_plan(observation)
 
         end_time = time.time()
         print(f"Planning time: {end_time - start_time}")
@@ -60,8 +65,8 @@ def run_point_robot_example():
         action = planner.get_command()
         # action = planner.zero_command()
         # action['agent0'] = torch.tensor([1.0, 1.5, 0., 0.], device=CONFIG["device"])
-        plans = planner.get_planned_traj()
-        simulator.plot_trajectories(plans)
+        # plans = planner.get_planned_traj()
+        # simulator.plot_trajectories(plans)
         observation = simulator.step(action)
 
         end_time = time.time()
