@@ -58,8 +58,8 @@ def run_point_robot_example():
         # print(f"Planning time: {end_time - start_time}")
 
         action = planner.get_command()
-        # plans = planner.get_planned_traj()
-        # simulator.plot_trajectories(plans)
+        plans = planner.get_planned_traj()
+        simulator.plot_trajectories(plans)
         observation = simulator.step(action)
 
         end_time = time.time()

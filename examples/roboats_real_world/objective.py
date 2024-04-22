@@ -67,8 +67,9 @@ class SocialNavigationObjective(object):
         self._rule_headon_radius = 2.0
         self._rule_angle = torch.pi/4.0
         self._rule_min_vel = 0.05
-        self._headon_weight = 5.0
-        self._crossing_weight = 5.0
+        self._headon_weight = 20.0
+        self._crossing_weight = 20.0
+        self._standon_weight = 5.0
 
 
     def compute_running_cost(self, agents_states, init_agent_state, t):
@@ -145,7 +146,7 @@ class SocialNavigationObjective(object):
         priority = self._check_priority(init_agent_i_states, init_agent_j_states, agent_i_states.shape[1])
         crossed_constvel = self._check_crossed_constvel(agent_i_states, init_agent_j_states, t)
 
-        return torch.sum((right_side & headon) * self._headon_weight, dim=0) + torch.sum((priority & crossed_constvel) * self._crossing_weight, dim=0)
+        return torch.sum((right_side & headon) * self._headon_weight, dim=0) + torch.sum((priority & crossed_constvel) * self._crossing_weight, dim=0) + torch.sum((priority) * self._stand_on_cost(agent_j_states, init_agent_j_states), dim=0)
 
     def _check_right_side(self, agent_i_states, agent_j_states):
         # Get the positions of the agents
@@ -262,8 +263,17 @@ class SocialNavigationObjective(object):
         # make pos_j same size as pos_i
         pos_j = pos_j.expand(-1, pos_i.shape[1], -1)
 
+        # Move pos_i n meters forward in the direction of heading
+        n = 1.0  # replace with the actual distance you want to move
+        dx = n * torch.cos(theta_i)
+        dy = n * torch.sin(theta_i)
+
+        pos_i_moved = pos_i.clone()
+        pos_i_moved[:, :, 0] += dx
+        pos_i_moved[:, :, 1] += dy
+
         # Compute the vector from the first agent to the second agent
-        vij = pos_j - pos_i
+        vij = pos_j - pos_i_moved
 
         # Compute the angle between vij and vel_i
         angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
@@ -282,3 +292,14 @@ class SocialNavigationObjective(object):
         # crossed_constvel = (angle < 0)
 
         return crossed_constvel
+    
+    def _stand_on_cost(self, agent_j_states, init_agent_j_states):
+        # Compute the angle between vel_j and init_vel_j
+        angle_vel_j = torch.atan2(agent_j_states[:, :, 4], agent_j_states[:, :, 3])
+        init_angle_vel_j = torch.atan2(init_agent_j_states[:, :, 4], init_agent_j_states[:, :, 3])
+        angle = angle_vel_j - init_angle_vel_j
+
+        # compute angle diff and normalize to [-pi, pi]
+        angle_diff = torch.atan2(torch.sin(angle), torch.cos(angle))
+
+        return angle_diff ** 2 * self._standon_weight
