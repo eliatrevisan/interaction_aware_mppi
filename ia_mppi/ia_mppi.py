@@ -209,7 +209,7 @@ class IAMPPIPlanner:
 
         # If the distance is less than a threshold, update the ego goal
         if distance < 0.5:
-            current_goals[self._agents[self._ego_agent]] = -current_ego_goal
+            current_goals[self._agents[self._ego_agent]][1] = -current_ego_goal[1]
         
         self._agent_cost.set_goals(current_goals)
         return None

@@ -61,10 +61,10 @@ class mppi_controller():
             rate.sleep()
         while not rospy.is_shutdown():
             observation = copy.deepcopy(self.realworld.get_states())
-            print(observation)
+            # print(observation)
 
             self.planner.update_other_goals(observation)
-            # self.planner.update_ego_goal(observation)
+            self.planner.update_ego_goal(observation)
 
             start_time = time.time()
             self.planner.make_plan(observation)
