@@ -58,8 +58,6 @@ def run_point_robot_example():
         # print(f"Planning time: {end_time - start_time}")
 
         action = planner.get_command()
-        # action = planner.zero_command()
-        # action['agent0'] = torch.tensor([1.0, 1.5, 0., 0.], device=CONFIG["device"])
         # plans = planner.get_planned_traj()
         # simulator.plot_trajectories(plans)
         observation = simulator.step(action)
