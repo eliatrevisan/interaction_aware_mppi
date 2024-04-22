@@ -36,7 +36,7 @@ class JackalDynamics:
         return new_states, actions
     
 class QuarterRoboatDynamics:
-    def __init__(self, cfg, n_samples) -> None:
+    def __init__(self, cfg) -> None:
         self.aa = 0.45
         self.bb = 0.90
 
@@ -49,8 +49,6 @@ class QuarterRoboatDynamics:
 
         self.cfg = cfg
         self.dt = cfg["dt"]
-        self.n_agents = len(cfg["agents"])
-        self.n_samples = n_samples
         self.device = cfg["device"]
 
 
@@ -65,16 +63,10 @@ class QuarterRoboatDynamics:
         
         self.B = torch.tensor([	    [1		,1		,0		,0],
                                     [0		,0	    ,1		,1],
-                                    [self.aa/2		,-self.aa/2		,self.bb/2    ,-self.aa/2    ]], device=self.device)
+                                    [self.aa/2		,-self.aa/2		,self.bb/2    ,-self.bb/2    ]], device=self.device)
 
         # Inverse of inertia matrix (precalculated for speed)
         self.Minv = torch.inverse(self.M)
-
-        self.zeros = torch.zeros(self.n_samples, self.n_agents, device=self.device)
-        self.Minv_batch = self.Minv.repeat(self.n_samples*self.n_agents, 1, 1)
-        self.B_batch = self.B.repeat(self.n_samples*self.n_agents, 1, 1)
-        self.D_batch = self.D.repeat(self.n_samples*self.n_agents, 1, 1)
-        self.C_batch = torch.zeros(self.n_samples*self.n_agents, 3, 3, device=self.device)
 
     def rot_matrix(self, heading):
         cos = torch.cos(heading)
@@ -106,6 +98,8 @@ class QuarterRoboatDynamics:
         # Convert from ENU to NED
         vel[:, :, 2] = -vel[:, :, 2]
 
+        self.zeros = torch.zeros(vel.size(0), vel.size(1), device=self.device)
+
         # Rotate velocity to the body frame
         vel_body = torch.bmm(self.rot_matrix(-pose[:,:,2]).reshape(-1,3,3), vel.reshape(-1,3).unsqueeze(2)).reshape(vel.size(0), vel.size(1), vel.size(2))
 
@@ -113,9 +107,12 @@ class QuarterRoboatDynamics:
         # print(vel_body[0,0,:])
 
         # Compute new velocity
-        self.C_batch = self.coriolis(vel_body).reshape(-1,3,3)
+        Minv_batch = self.Minv.repeat(vel.size(0)*vel.size(1), 1, 1)
+        B_batch = self.B.repeat(vel.size(0)*vel.size(1), 1, 1)
+        D_batch = self.D.repeat(vel.size(0)*vel.size(1), 1, 1)
+        C_batch = self.coriolis(vel_body).reshape(-1,3,3)
         
-        new_vel_body = torch.bmm(self.Minv_batch, (torch.bmm(self.B_batch, actions.reshape(-1,4).unsqueeze(2))- torch.bmm(self.C_batch, vel_body.reshape(-1,3).unsqueeze(2)) - torch.bmm(self.D_batch, vel_body.reshape(-1,3).unsqueeze(2)))).reshape(vel.size(0), vel.size(1), vel.size(2)) * self.dt + vel_body
+        new_vel_body = torch.bmm(Minv_batch, (torch.bmm(B_batch, actions.reshape(-1,4).unsqueeze(2))- torch.bmm(C_batch, vel_body.reshape(-1,3).unsqueeze(2)) - torch.bmm(D_batch, vel_body.reshape(-1,3).unsqueeze(2)))).reshape(vel.size(0), vel.size(1), vel.size(2)) * self.dt + vel_body
 
         # Rotate velocity to the world frame
         vel = torch.bmm(self.rot_matrix(pose[:,:,2]).reshape(-1,3,3), new_vel_body.reshape(-1,3).unsqueeze(2)).reshape(vel.size(0), vel.size(1), vel.size(2))

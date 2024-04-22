@@ -1,11 +1,15 @@
 from mppi_torch.mppi import MPPIPlanner
 import torch
+torch.set_grad_enabled(False)
+import os
+os.environ["TORCHDYNAMO_DYNAMIC_SHAPES"] = "1"
+
 
 
 class IAMPPIPlanner:
     def __init__(self, cfg, dynamics, agent_cost, config_cost, ego_agent=None) -> None:
         self._device = cfg["device"]
-        self._dt = cfg["dt"]
+        self._dt = torch.tensor(cfg["dt"], device=self._device)
         self._horizon = cfg["mppi"]["horizon"]
         self._dynamic = dynamics
         self._agent_cost = agent_cost
@@ -33,8 +37,8 @@ class IAMPPIPlanner:
         self.mppi = MPPIPlanner(
             cfg=mppi_cfg["mppi"],
             nx=self._nx_sys,
-            dynamics=self._step,
-            running_cost=self._compute_running_cost,
+            dynamics=torch.compile(self._step),
+            running_cost=torch.compile(self._compute_running_cost),
         )
     
     def _update_config(self, cfg):
@@ -94,7 +98,7 @@ class IAMPPIPlanner:
         # Save the initial state tensor for cost computation
         self.intial_state_tensor = system_state_tensor
         # Reset timestep
-        self.t = 0
+        self.t = torch.tensor(0, device=self._device)
 
         # Get the actions as a concatenated tensor
         self._action_seq_sys = self.mppi.command(system_state_tensor)

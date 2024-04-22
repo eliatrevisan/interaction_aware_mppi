@@ -18,13 +18,8 @@ CONFIG = yaml.safe_load(open(f"{abs_path}/cfg_roboats.yaml"))
 
 def run_point_robot_example():
 
-    dynamics_sim = QuarterRoboatDynamics(
-        cfg=CONFIG,
-        n_samples=1
-    )
-    dynamics_plan = QuarterRoboatDynamics(
-        CONFIG,
-        n_samples=CONFIG['mppi']['num_samples']
+    dynamics = QuarterRoboatDynamics(
+        cfg=CONFIG
     )
     agent_cost = RoboatObjective(
         goals=torch.tensor([agent_info['initial_goal'] for agent_info in CONFIG['agents'].values()], device=CONFIG["device"]),
@@ -36,12 +31,12 @@ def run_point_robot_example():
         
     simulator = Simulator(
         cfg=CONFIG,
-        dynamics=dynamics_sim.step
+        dynamics=dynamics.step
     )
 
     planner = IAMPPIPlanner(
         cfg=copy.deepcopy(CONFIG),
-        dynamics=dynamics_plan.step,
+        dynamics=dynamics.step,
         agent_cost=copy.deepcopy(agent_cost),
         config_cost=copy.deepcopy(configuration_cost),
     )
@@ -52,15 +47,15 @@ def run_point_robot_example():
     for _ in tqdm(range(CONFIG['simulator']['steps'])):
         start_time = time.time()
 
-        with profile(with_stack=True, profile_memory=True, experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)) as prof:
-                planner.make_plan(observation)
-        # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=50))
-        prof.export_stacks("/tmp/profiler_stacks.txt", "self_cpu_time_total")
+        # with profile(with_stack=True, profile_memory=True, experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True)) as prof:
+        #         planner.make_plan(observation)
+        # # print(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit=50))
+        # prof.export_stacks("/tmp/profiler_stacks.txt", "self_cpu_time_total")
 
-        # planner.make_plan(observation)
+        planner.make_plan(observation)
 
-        end_time = time.time()
-        print(f"Planning time: {end_time - start_time}")
+        # end_time = time.time()
+        # print(f"Planning time: {end_time - start_time}")
 
         action = planner.get_command()
         # action = planner.zero_command()

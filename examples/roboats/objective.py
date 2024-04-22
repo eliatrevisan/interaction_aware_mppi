@@ -13,21 +13,18 @@ class RoboatObjective(object):
         self._max_speed_weight = 5.0
 
     def compute_running_cost(self, state: torch.Tensor):
-        goal_dist = self._goal_cost(state[:, :, 0:2])
-        vel_cost = self._vel_cost(state)
-        heading = self._heading_to_goal(state)
-        return goal_dist  + vel_cost + heading
+        return self._goal_cost(state[:, :, 0:2])  + self._vel_cost(state) + self._heading_to_goal(state)
     
     def _goal_cost(self, positions):
         return torch.linalg.norm(positions - self.nav_goals, axis=2) * self._goal_weight
     
     def _vel_cost(self, state):
         # convert velocities to body frame
-        vel = state[:, :, 3:5]
-        theta = state[:, :, 2]
-        vel_body = torch.stack([vel[:, :, 0] * torch.cos(theta) + vel[:, :, 1] * torch.sin(theta), -vel[:, :, 0] * torch.sin(theta) + vel[:, :, 1] * torch.cos(theta)], dim=2)
+        cos = torch.cos(state[:, :, 2])
+        sin = torch.sin(state[:, :, 2])
+        vel_body = torch.stack([state[:, :, 3] * cos + state[:, :, 4] * sin, -state[:, :, 3] * sin + state[:, :, 4] * cos], dim=2)
         
-        # penalize negative x velocity
+        # penalize velocities in the back, lateral and rotational directions
         back_vel_cost = torch.relu(-vel_body[:, :, 0]) * self._back_vel_weight
         lat_vel_cost = vel_body[:, :, 1] ** 2 * self._lat_vel_weight
         rot_vel_cost = state[:, :, 5] ** 2 * self._rot_vel_weight
@@ -63,8 +60,8 @@ class SocialNavigationObjective(object):
     def __init__(self, device="cuda:0"):
         self._device = device
         self._min_dist = 1.0
-        self.width = 0.45
-        self.height = 0.9
+        self._width = 0.45
+        self._height = 0.9
         self._coll_weight = 100.0
         self._rule_cross_radius = 5.0
         self._rule_headon_radius = 2.0
@@ -102,7 +99,7 @@ class SocialNavigationObjective(object):
         agent_position_pixel = (agent_i_states[:, :, :2] * 10 + 500).long()
 
         # Convert the agent's size from meters to pixels
-        agent_size_pixel = (torch.tensor([self.height, self.width]) * 10).long()
+        agent_size_pixel = (torch.tensor([self._height, self._width]) * 10).long()
 
         # Get the agent's heading
         theta = agent_i_states[:, :, 2]

@@ -38,6 +38,6 @@ mppi:
 
 simulator:
   render: False
-  steps: 2 
+  steps: 200 
   urdf: "quarter_roboat.urdf"
   mode: "thrust"
