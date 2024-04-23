@@ -5,15 +5,15 @@ agents:
   roboat1:
     initial_pose: [-3.0, 0.0, 1.57]
     initial_goal: [-3.0, 3.0]
-  # roboat2:
-  #   initial_pose: [3.0, 0.0, 1.57]
-  #   initial_goal: [-3.0, -3.0]
+  roboat2:
+    initial_pose: [3.0, 0.0, 1.57]
+    initial_goal: [-3.0, -3.0]
   # agent2:
   #   initial_pose: [0.0, 2.0, -1.57]
   #   initial_goal: [0.0, -2.0]
-  agent3:
-    initial_pose: [0.0, -2.0, 1.57]
-    initial_goal: [0.0, 2.0]
+  # agent3:
+  #   initial_pose: [0.0, -2.0, 1.57]
+  #   initial_goal: [0.0, 2.0]
 
 mppi: 
   mppi_mode: "halton-spline"  # halton-spline, simple
