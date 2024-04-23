@@ -1,4 +1,5 @@
 import torch
+import time
 
 
 class RoboatObjective(object):
@@ -45,7 +46,7 @@ class RoboatObjective(object):
         # Compute the angle between the heading and the goal
         angle = torch.atan2(goal[:, :, 1], goal[:, :, 0]) - theta
         # Normalize the angle to [-pi, pi]
-        angle = torch.atan2(torch.sin(angle), torch.cos(angle))
+        angle = (angle+ torch.pi) % (2 * torch.pi) - torch.pi
         cost = torch.where(torch.linalg.norm(state[:,:,0:2] - self.nav_goals, axis=2)>0.5, angle**2, torch.zeros_like(angle))
         return cost * self._heading_to_goal_weight
     
@@ -137,138 +138,123 @@ class SocialNavigationObjective(object):
         # From here on, we assume the velocities are in the world frame
         # if not, rotate them before continuing!
         # Also, we assume EastNorthUp
+
         # test_i = torch.tensor([-0.5,0,0,0,1,0]).unsqueeze(0).unsqueeze(0)
         # test_j = torch.tensor([0.5,0,0,0,-1,0]).unsqueeze(0).unsqueeze(0)
         # self._check_right_side(test_i, test_j)
         # self._check_vel_headon(test_i, test_j)
-        right_side = self._check_right_side(agent_i_states, agent_j_states)
-        headon = self._check_vel_headon(agent_i_states, agent_j_states)
-        priority = self._check_priority(init_agent_i_states, init_agent_j_states, agent_i_states.shape[1])
-        crossed_constvel = self._check_crossed_constvel(agent_i_states, init_agent_j_states, t)
 
-        return torch.sum((right_side & headon) * self._headon_weight, dim=0) + torch.sum((priority & crossed_constvel) * self._crossing_weight, dim=0) + torch.sum((priority) * self._stand_on_cost(agent_j_states, init_agent_j_states), dim=0)
-
-    def _check_right_side(self, agent_i_states, agent_j_states):
+        # compute useful stuff
         # Get the positions of the agents
-        pos_i = agent_i_states[:, :, :2]
-        pos_j = agent_j_states[:, :, :2]
-        vel_i = agent_i_states[:, :, 3:5]
-        theta_i = agent_i_states[:, :, 2]
+        self.pos_i = agent_i_states[:, :, :2]
+        self.pos_j = agent_j_states[:, :, :2]
+        self.vel_i = agent_i_states[:, :, 3:5]
+        self.vel_j = agent_j_states[:, :, 3:5]
+        self.theta_i = agent_i_states[:, :, 2]
+        self.init_pos_i = init_agent_i_states[:, :, :2]
+        self.init_pos_j = init_agent_j_states[:, :, :2]
+        self.init_vel_i = init_agent_i_states[:, :, 3:5]
+        self.init_vel_j = init_agent_j_states[:, :, 3:5]
 
         # Compute the vector from the first agent to the second agent
-        vij = pos_j - pos_i
+        self.vij = self.pos_j - self.pos_i
+        self.init_vij = self.init_pos_j - self.init_pos_i
 
         # Compute the angle between vij and vel_i
-        angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
-        angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
-        angle = angle_vij - angle_vel_i
+        self.angle_vij = torch.atan2(self.vij[:, :, 1], self.vij[:, :, 0])
+        self.angle_vel_i = torch.atan2(self.vel_i[:, :, 1], self.vel_i[:, :, 0])
+        self.angle_vel_j = torch.atan2(self.vel_j[:, :, 1], self.vel_j[:, :, 0])
+        self.angle_vel_j_vel_i = self.angle_vel_j - self.angle_vel_i
+        self.angle_vij_vel_i = self.angle_vij - self.angle_vel_i
+
+        self.init_angle_vij = torch.atan2(self.init_vij[:, :, 1], self.init_vij[:, :, 0])
+        self.init_angle_vel_i = torch.atan2(self.init_vel_i[:, :, 1], self.init_vel_i[:, :, 0])
+        self.init_angle_vel_j = torch.atan2(self.init_vel_j[:, :, 1], self.init_vel_j[:, :, 0])
+        self.init_angle_vel_j_vel_i = self.init_angle_vel_j - self.angle_vel_i
+        self.init_angle_vij_vel_i = self.init_angle_vij - self.init_angle_vel_i
+
+        self.magnitude_vij = torch.norm(self.vij, dim=2)
+        self.magnitude_vel_i = torch.norm(self.vel_i, dim=2)
+        self.magnitude_vel_j = torch.norm(self.vel_j, dim=2)
+
+        self.init_magnitude_vij = torch.norm(self.init_vij, dim=2)
+        self.init_magnitude_vel_i = torch.norm(self.init_vel_i, dim=2)
+        self.init_magnitude_vel_j = torch.norm(self.init_vel_j, dim=2)
+
+        right_side = self._check_right_side()
+        headon = self._check_vel_headon()
+        priority = self._check_priority(agent_i_states.shape[1])
+        crossed_constvel = self._check_crossed_constvel(t)
+
+        return torch.sum((right_side & headon) * self._headon_weight, dim=0) + torch.sum((priority & crossed_constvel) * self._crossing_weight, dim=0) + torch.sum((priority) * self._stand_on_cost(), dim=0)
+
+    def _check_right_side(self):
 
         # # Compute the angle between vij and heading of agent i
         # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         # angle = angle_vij - theta_i
 
         # compute angle diff and nomalize to [-pi, pi]
-        angle_diff = torch.atan2(torch.sin(angle + torch.pi/2), torch.cos(angle + torch.pi/2))
-        magnitude_vij = torch.sqrt((vij ** 2).sum(dim=2))
+        # angle_diff = torch.atan2(torch.sin(self.angle_vij_vel_i + torch.pi/2), torch.cos(self.angle_vij_vel_i + torch.pi/2))
+
+        angle_diff = (self.angle_vij_vel_i + torch.pi/2 + torch.pi) % (2 * torch.pi) - torch.pi
+
+        # print(angle_diff - angle_diff2)
 
         # Check if the magnitude of vij is greater than the rule radius and the absolute difference between angle and pi/4 is less than the rule angle
-        is_right_side = (magnitude_vij < self._rule_headon_radius) & (torch.abs(angle_diff) < self._rule_angle)
+        is_right_side = (self.magnitude_vij < self._rule_headon_radius) & (torch.abs(angle_diff) < self._rule_angle)
 
         return is_right_side
     
-    def _check_vel_headon(self, agent_i_states, agent_j_states):
-        # Get the velocities of the agents
-        vel_i = agent_i_states[:, :, 3:5]
-        vel_j = agent_j_states[:, :, 3:5]
-        theta_i = agent_i_states[:, :, 2]
-        theta_j = agent_j_states[:, :, 2]
-
-        # Compute the angle between vel_i and vel_j
-        angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
-        angle_vel_j = torch.atan2(vel_j[:, :, 1], vel_j[:, :, 0])
-        angle = angle_vel_j - angle_vel_i
-
+    def _check_vel_headon(self):
         # # Compute the angle between agents' headings
         # angle = theta_j - theta_i
 
         # compute angle diff and normalize to [-pi, pi]
-        angle_diff = torch.atan2(torch.sin(angle - torch.pi), torch.cos(angle - torch.pi))
-
-        # Compute the magnitudes of vel_i and vel_j
-        magnitude_vel_i = torch.sqrt((vel_i ** 2).sum(dim=2))
-        magnitude_vel_j = torch.sqrt((vel_j ** 2).sum(dim=2))
+        # angle_diff2 = torch.atan2(torch.sin(self.angle_vel_j_vel_i - torch.pi), torch.cos(self.angle_vel_j_vel_i - torch.pi))
+        angle_diff = (self.angle_vel_j_vel_i - torch.pi + torch.pi) % (2 * torch.pi) - torch.pi
 
         # Check if the absolute difference between angle and pi is less than the rule angle
-        is_headon = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i >= self._rule_min_vel) & (magnitude_vel_j >= self._rule_min_vel)
+        is_headon = (torch.abs(angle_diff) < self._rule_angle) & (self.magnitude_vel_i >= self._rule_min_vel) & (self.magnitude_vel_j >= self._rule_min_vel)
 
         return is_headon
     
-    def _check_priority(self, init_agent_i_states, init_agent_j_states, k):
-        pos_i = init_agent_i_states[:, :, :2]
-        pos_j = init_agent_j_states[:, :, :2]
-        vel_i = init_agent_i_states[:, :, 3:5]
-        vel_j = init_agent_j_states[:, :, 3:5]
-        theta_i = init_agent_i_states[:, :, 2]
-        theta_j = init_agent_j_states[:, :, 2]
-
-        # Compute the vector from the first agent to the second agent
-        vij = pos_j - pos_i
-
-        # Compute the angle between vel_i and vij 
-        angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
-        angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
-        angle = angle_vij - angle_vel_i
-
+    def _check_priority(self, k):
         # # Compute the angle between vij and heading of agent i
         # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         # angle = angle_vij - theta_i
 
-        # Nomalize to [-pi, pi]
-        angle = torch.atan2(torch.sin(angle), torch.cos(angle))
-
-        # Compute the magnitudes of vij
-        magnitude_vij = torch.sqrt((vij ** 2).sum(dim=2))
-
-        is_front_right = (magnitude_vij < self._rule_cross_radius) & (angle < 0) & (angle > -torch.pi/2)
-
-        # Compute the angle between vel_i and vel_j
-        angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
-        angle_vel_j = torch.atan2(vel_j[:, :, 1], vel_j[:, :, 0])
-        angle_2 = angle_vel_j - angle_vel_i
+        is_front_right = (self.init_magnitude_vij < self._rule_cross_radius) & (self.init_angle_vij_vel_i < 0) & (self.init_angle_vij_vel_i > -torch.pi/2)
 
         # # Compute the angle between agents' headings
         # angle_2 = theta_j - theta_i
 
         # compute angle diff and normalize to [-pi, pi]
-        angle_diff = torch.atan2(torch.sin(angle_2 - torch.pi/2), torch.cos(angle_2 - torch.pi/2))
+        #angle_diff = torch.atan2(torch.sin(self.init_angle_vel_j_vel_i - torch.pi/2), torch.cos(self.init_angle_vel_j_vel_i - torch.pi/2))
+        angle_diff = (self.init_angle_vel_j_vel_i - torch.pi/2 + torch.pi) % (2 * torch.pi) - torch.pi
 
-        # Compute the magnitudes of vel_i and vel_j
-        magnitude_vel_i = torch.sqrt((vel_i ** 2).sum(dim=2))
-        magnitude_vel_j = torch.sqrt((vel_j ** 2).sum(dim=2))
-
-        is_giveway_vel = (torch.abs(angle_diff) < self._rule_angle) & (magnitude_vel_i >= self._rule_min_vel) & (magnitude_vel_j >= self._rule_min_vel)
+        is_giveway_vel = (torch.abs(angle_diff) < self._rule_angle) & (self.init_magnitude_vel_i >= self._rule_min_vel) & (self.init_magnitude_vel_j >= self._rule_min_vel)
 
         return is_front_right.expand(-1, k) & is_giveway_vel.expand(-1, k)
     
-    def _check_crossed_constvel(self, agent_i_states, init_agent_j_states, t):
-        pos_i = agent_i_states[:, :, :2]
-        init_pos_j = init_agent_j_states[:, :, :2]
-        vel_i = agent_i_states[:, :, 3:5]
-        init_vel_j = init_agent_j_states[:, :, 3:5]
-        theta_i = agent_i_states[:, :, 2]
+    def _check_crossed_constvel(self, t):
+        # pos_i = agent_i_states[:, :, :2]
+        # init_pos_j = init_agent_j_states[:, :, :2]
+        # vel_i = agent_i_states[:, :, 3:5]
+        # init_vel_j = init_agent_j_states[:, :, 3:5]
+        # theta_i = agent_i_states[:, :, 2]
 
         # find current position of agent j
-        pos_j = init_pos_j + init_vel_j * t
-        # pos_j = init_pos_j
+        pos_j = self.init_pos_j + self.init_vel_j * t
         # make pos_j same size as pos_i
-        pos_j = pos_j.expand(-1, pos_i.shape[1], -1)
+        pos_j = pos_j.expand(-1, self.pos_i.shape[1], -1)
 
         # Move pos_i n meters forward in the direction of heading
         n = 1.0  # replace with the actual distance you want to move
-        dx = n * torch.cos(theta_i)
-        dy = n * torch.sin(theta_i)
+        dx = n * torch.cos(self.theta_i)
+        dy = n * torch.sin(self.theta_i)
 
-        pos_i_moved = pos_i.clone()
+        pos_i_moved = self.pos_i.clone()
         pos_i_moved[:, :, 0] += dx
         pos_i_moved[:, :, 1] += dy
 
@@ -277,29 +263,28 @@ class SocialNavigationObjective(object):
 
         # Compute the angle between vij and vel_i
         angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
-        angle_vel_i = torch.atan2(vel_i[:, :, 1], vel_i[:, :, 0])
-        angle = angle_vij - angle_vel_i
+        angle = angle_vij - self.angle_vel_i
 
         # # Compute the angle between vij and heading of agent i
         # angle_vij = torch.atan2(vij[:, :, 1], vij[:, :, 0])
         # angle = angle_vij - theta_i
 
         # # Nomalize to [-pi, pi]
-        angle_diff = torch.atan2(torch.sin(angle + torch.pi/2), torch.cos(angle + torch.pi/2))
+        # angle_diff = torch.atan2(torch.sin(angle + torch.pi/2), torch.cos(angle + torch.pi/2))
         # angle = torch.atan2(torch.sin(angle), torch.cos(angle))
+        angle_diff = (angle + torch.pi/2 + torch.pi) % (2 * torch.pi) - torch.pi
 
         crossed_constvel = (angle_diff < 0) & (angle_diff > -torch.pi/2)
         # crossed_constvel = (angle < 0)
 
         return crossed_constvel
     
-    def _stand_on_cost(self, agent_j_states, init_agent_j_states):
+    def _stand_on_cost(self):
         # Compute the angle between vel_j and init_vel_j
-        angle_vel_j = torch.atan2(agent_j_states[:, :, 4], agent_j_states[:, :, 3])
-        init_angle_vel_j = torch.atan2(init_agent_j_states[:, :, 4], init_agent_j_states[:, :, 3])
-        angle = angle_vel_j - init_angle_vel_j
+        angle = self.angle_vel_j - self.init_angle_vel_j
 
         # compute angle diff and normalize to [-pi, pi]
-        angle_diff = torch.atan2(torch.sin(angle), torch.cos(angle))
+        # angle_diff = torch.atan2(torch.sin(angle), torch.cos(angle))
+        angle_diff = (angle + torch.pi) % (2 * torch.pi) - torch.pi
 
         return angle_diff ** 2 * self._standon_weight

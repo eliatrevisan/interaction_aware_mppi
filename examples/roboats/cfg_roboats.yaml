@@ -5,15 +5,15 @@ agents:
   agent0:
     initial_pose: [-2.0, 0.0, 0.0]
     initial_goal: [2.0, 0.0]
-  agent1:
-    initial_pose: [2.0, 0.0, 3.14]
-    initial_goal: [-2.0, 0.]
+  # agent1:
+  #   initial_pose: [2.0, 0.0, 3.14]
+  #   initial_goal: [-2.0, 0.]
   # agent2:
   #   initial_pose: [0.0, 2.0, -1.57]
   #   initial_goal: [0.0, -2.0]
-  # # agent3:
-  #   initial_pose: [0.0, -2.0, 1.57]
-  #   initial_goal: [0.0, 2.0]
+  agent3:
+    initial_pose: [0.0, -2.0, 1.57]
+    initial_goal: [0.0, 2.0]
 
 mppi: 
   mppi_mode: "halton-spline"  # halton-spline, simple
@@ -37,7 +37,7 @@ mppi:
   u_per_command: 20
 
 simulator:
-  render: False
+  render: True
   steps: 200 
   urdf: "quarter_roboat.urdf"
   mode: "thrust"
