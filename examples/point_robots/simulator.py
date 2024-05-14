@@ -32,24 +32,27 @@ class Simulator:
         env: UrdfEnv = gym.make("urdf-env-v0", dt=self._dt, robots=robots, render=cfg['simulator']['render'])
 
         # Extract initial positions from agents
-        initial_positions = [agent_info['initial_pose'] for agent_info in cfg['agents'].values()]
+        self.initial_positions = [agent_info['initial_pose'] for agent_info in cfg['agents'].values()]
         # Reset positions in the environment
-        env.reset(pos=np.array(initial_positions))
+        env.reset(pos=np.array(self.initial_positions))
 
         for agent_info in cfg['agents'].values():
             goal_dict = {
                 "weight": 1.0,
                 "is_primary_goal": True,
-                "indices": [0, 1],
+                "indices": [0, 1, 2],
                 "parent_link": 0,
                 "child_link": 1,
-                "desired_position": agent_info['initial_goal'],
+                "desired_position": agent_info['initial_goal'] + [0.0],
                 "epsilon": 0.05,
                 "type": "staticSubGoal",
             }
             goal = StaticSubGoal(name="simpleGoal", content_dict=goal_dict)
             env.add_goal(goal)
         return env
+    
+    def reset(self) -> torch.Tensor:
+        self._environment.reset(pos=np.array(self.initial_positions))
 
     def step(self, action) -> torch.Tensor:
         # Extract the actions from the dictionary and concatenate them into a numpy array
