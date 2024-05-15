@@ -1,11 +1,9 @@
-import sys
-sys.path.append('/root/dev/ia_mppi/ia_mppi/')
 import torch
 import os
 from simulator import Simulator
 from objective import JackalRobotObjective, SocialNavigationObjective
 from dynamics import JackalDynamics
-from ia_mppi import IAMPPIPlanner
+from ia_mppi.ia_mppi import IAMPPIPlanner
 import yaml
 from tqdm import tqdm
 import copy

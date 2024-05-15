@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "ia_mppi"
+version = "0.1.0"
+description = "mppi-torch wrapper for multi-agent motion planning"
+authors = ["eliatrevisan <elia.trv@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8" 
+mppi-torch = {git = "https://github.com/tud-airlab/mppi_torch.git"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,18 +1,16 @@
-import sys
-sys.path.append('/root/dev/ia_mppi/ia_mppi/')
 import torch
 import os
 from simulator import Simulator
 from objective import JackalRobotObjective, SocialNavigationObjective
 from dynamics import JackalDynamics
-from ia_mppi import IAMPPIPlanner
+from ia_mppi.ia_mppi import IAMPPIPlanner
 import yaml
 from tqdm import tqdm
 import copy
 
 # Load the config file
 abs_path = os.path.dirname(os.path.abspath(__file__))
-CONFIG = yaml.safe_load(open(f"{abs_path}/cfg_point_robot.yaml"))
+CONFIG = yaml.safe_load(open(f"{abs_path}/cfg_jackals.yaml"))
 
 def run_point_robot_example():
 

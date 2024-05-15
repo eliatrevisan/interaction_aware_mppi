@@ -26,7 +26,7 @@ class SocialNavigationObjective(object):
         self._rule_headon_radius = 2.0
         self._rule_angle = torch.pi/4.0
         self._rule_min_vel = 0.1
-        self._headon_weight = 0.0
+        self._headon_weight = 2.0
         self._crossing_weight = 5.0
 
 

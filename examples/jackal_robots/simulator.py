@@ -41,7 +41,7 @@ class Simulator:
                 wheel_distance = 2 * 0.187795 + 0.08,
         ))
             
-        env: UrdfEnv = gym.make("urdf-env-v0", dt=self._dt, robots=robots, render=cfg['simulator']['render'])
+        env: UrdfEnv = UrdfEnv(dt=self._dt, robots=robots, render=cfg['simulator']['render'])
 
         # Extract initial positions from agents
         initial_positions = [agent_info['initial_pose'] for agent_info in cfg['agents'].values()]

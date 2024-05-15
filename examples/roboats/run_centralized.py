@@ -1,16 +1,13 @@
-import sys
-sys.path.append('/root/dev/ia_mppi/ia_mppi/')
 import torch
 import os
 from simulator import Simulator
 from objective import RoboatObjective, SocialNavigationObjective
 from dynamics import QuarterRoboatDynamics
-from ia_mppi import IAMPPIPlanner
+from ia_mppi.ia_mppi import IAMPPIPlanner
 import yaml
 from tqdm import tqdm
 import copy
 import time
-from torch.profiler import profile, record_function, ProfilerActivity
 
 # Load the config file
 abs_path = os.path.dirname(os.path.abspath(__file__))

@@ -16,11 +16,12 @@ agents:
     initial_goal: [0.0, 2.0]
 
 mppi: 
-  mppi_mode: "halton-spline"  # halton-spline, simple
+  mppi_mode: "simple"  # halton-spline, simple
   sampling_method: "halton"   # halton, random
   num_samples: 2000
   horizon: 20                 # At least 12 for Halton Sampling
   lambda_: 0.1
+  update_lambda: True
   update_cov: False
   rollout_var_discount: 0.95
   sample_null_action: True

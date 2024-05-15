@@ -29,7 +29,7 @@ class Simulator:
         for _ in cfg['agents'].items():
             robots.append(GenericUrdfReacher(urdf=cfg["simulator"]["urdf"], mode=cfg["simulator"]["mode"]))
             
-        env: UrdfEnv = gym.make("urdf-env-v0", dt=self._dt, robots=robots, render=cfg['simulator']['render'])
+        env: UrdfEnv = UrdfEnv(dt=self._dt, robots=robots, render=cfg['simulator']['render'])
 
         # Extract initial positions from agents
         self.initial_positions = [agent_info['initial_pose'] for agent_info in cfg['agents'].values()]

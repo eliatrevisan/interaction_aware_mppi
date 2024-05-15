@@ -1,11 +1,9 @@
-import sys
-sys.path.append('/root/dev/ia_mppi/ia_mppi/')
 import torch
 import os
 from realworld import Realworld
 from objective import RoboatObjective, SocialNavigationObjective
 from dynamics import QuarterRoboatDynamics
-from ia_mppi import IAMPPIPlanner
+from ia_mppi.ia_mppi import IAMPPIPlanner
 import yaml
 import copy
 import rospy

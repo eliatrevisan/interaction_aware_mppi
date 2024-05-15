@@ -37,8 +37,8 @@ class IAMPPIPlanner:
         self.mppi = MPPIPlanner(
             cfg=mppi_cfg["mppi"],
             nx=self._nx_sys,
-            dynamics=torch.compile(self._step),
-            running_cost=torch.compile(self._compute_running_cost),
+            dynamics=self._step,
+            running_cost=self._compute_running_cost,
         )
     
     def _update_config(self, cfg):
@@ -98,7 +98,7 @@ class IAMPPIPlanner:
         # Save the initial state tensor for cost computation
         self.intial_state_tensor = system_state_tensor
         # Reset timestep
-        self.t = torch.tensor(0, device=self._device)
+        self.t = torch.tensor(0.0, device=self._device)
 
         # Get the actions as a concatenated tensor
         self._action_seq_sys = self.mppi.command(system_state_tensor)
