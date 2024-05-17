@@ -33,3 +33,21 @@ python run_centralized.py
 ## Contributing
 
 Contributions are welcome. Please submit a pull request.
+
+## Cite
+
+This repository is a PyTorch re-implementation of the code in
+[Multi-Agent Path Integral Control for Interaction-Aware Motion Planning in Urban Canals](https://arxiv.org/abs/2302.06547) 
+This PyTorch implementation is easier to extend to different robots, and offers gpu parallelization. The original code, written in C++, could achieve longer planning horizons in real-time, but is not yet available.
+If you are using this software, please cite:
+```bash
+@INPROCEEDINGS{10161511,
+  author={Streichenberg, Lucas and Trevisan, Elia and Chung, Jen Jen and Siegwart, Roland and Alonso-Mora, Javier},
+  booktitle={2023 IEEE International Conference on Robotics and Automation (ICRA)}, 
+  title={Multi-Agent Path Integral Control for Interaction-Aware Motion Planning in Urban Canals}, 
+  year={2023},
+  volume={},
+  number={},
+  pages={1379-1385},
+  doi={10.1109/ICRA48891.2023.10161511}}
+```
