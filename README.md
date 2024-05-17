@@ -29,6 +29,11 @@ pip install .
 
 ## Usage
 
+Access the virtual environment using
+```bash
+poetry shell
+```
+
 To run the point robot example:
 
 ```
