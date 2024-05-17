@@ -21,6 +21,11 @@ cd <project-directory>
 poetry install
 ```
 
+Access the virtual environment using
+```bash
+poetry shell
+```
+
 ## System-level installation
 Alternatively, you can also install at the system level using pip, even though we advise using the virtual environment:
 ```bash
@@ -28,11 +33,6 @@ pip install .
 ```
 
 ## Usage
-
-Access the virtual environment using
-```bash
-poetry shell
-```
 
 To run the point robot example:
 
